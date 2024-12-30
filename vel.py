@@ -107,3 +107,14 @@ async def run():
 if __name__ == "__main__":
     # Run the asyncio loop
     asyncio.run(run())
+
+
+
+
+#First Parameter (0.0): Represents the x-velocity in body coordinates (forward/backward). A value of 0.0 means no movement along the forward/backward axis.
+
+#Second Parameter (-5.0): Represents the y-velocity in body coordinates (left/right). A value of -5.0 means the drone is moving 5 m/s to the left (negative direction along the y-axis).##
+
+#Third Parameter (0.0): Represents the z-velocity in body coordinates (up/down). A value of 0.0 means no vertical movement (hovering).
+
+#Fourth Parameter (30.0): Represents the yaw rate (rotation around the z-axis). A value of 30.0 means the drone is rotating 30 degrees per second in the clockwise direction around its body (positive yaw rate).
