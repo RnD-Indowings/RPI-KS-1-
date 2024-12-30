@@ -60,7 +60,7 @@ async def print_current_speed(drone):
 
 async def run():
     drone = System()
-    await drone.connect(system_address="udp://:14540")
+    await drone.connect(system_address="serial:///dev/ttyACM0:1152000")
     speed_task = asyncio.ensure_future(print_current_speed(drone))
 
     print("Waiting for drone to connect...")
