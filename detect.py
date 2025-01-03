@@ -15,7 +15,10 @@ import numpy as np
 import math
 import connect
 import asyncio
-
+import random
+import threading
+import os
+import subprocess
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLOv5 root directory
 if str(ROOT) not in sys.path:
@@ -25,10 +28,6 @@ ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 from ultralytics.utils.plotting import Annotator, colors, save_one_box
 from pymavlink import mavutil
 from mavsdk import System
-#--------------------------------1 - pixhawk-------------------------------------------------------------
-from connect import connect_to_px4 , get_gps_data
-connection_gps = connect_to_px4('127.0.0.1:14550')  # Update with your connection string
-#--------------------------------1 - pixhawk-------------------------------------------------------------
 from models.common import DetectMultiBackend
 from utils.dataloaders import IMG_FORMATS, VID_FORMATS, LoadImages, LoadScreenshots, LoadStreams
 from utils.general import (
@@ -48,6 +47,23 @@ from utils.general import (
     xyxy2xywh,
 )
 from utils.torch_utils import select_device, smart_inference_mode
+
+terminal_opened = False
+lock = threading.Lock()
+def run_program_after_delay(center_x, center_y):
+    global terminal_opened
+    with lock:
+        if terminal_opened:
+            return
+        terminal_opened = True
+        time.sleep(10)
+    
+    # Run the program using os.system with arguments
+    command = f'gnome-terminal -- bash -c "python3 localization.py {center_x} {center_y}; exec bash"'
+    
+    # Execute the command to open the terminal and run the script
+    os.system(command)
+    return
 
 @smart_inference_mode()
 def run(
@@ -85,10 +101,34 @@ def run(
     sensor_height = 2.4,
     img_width = 640,
     img_height = 640,
-    locked_target = None
+    locked_target = None,
 ):
     
+    rtsp_url = "rtsp://127.0.0.1:8554/live"
+    fps = 60
+    print("Frame rate of input video: ", fps)
+    ffmpeg_command = [
+        'ffmpeg',  # Read input at native frame rate
+        '-y',  # Overwrite output files
+        '-f', 'rawvideo',  # Input format
+        '-vcodec', 'rawvideo',  # Codec
+        '-pix_fmt', 'bgr24',  # Pixel format
+        '-s', '640x480',  # Resolution
+        '-r', str(fps),  # Frame rate from input video
+        '-i', '-',  # Input from stdin
+        '-an',  # No audio
+        '-vcodec', 'libx264',  # Video codec
+        '-preset', 'ultrafast',  # Adjust preset if needed
+        '-tune', 'zerolatency',  # Minimize latency
+        '-f', 'rtsp',  # RTSP format
+        rtsp_url  # Output RTSP stream URL
+    ]
+    
     min_distance = float('inf')  # Initialize to a very large value
+    process = subprocess.Popen(ffmpeg_command, stdin=subprocess.PIPE)
+    prev_time = time.time()
+    elapsed_time = time.time() - prev_time
+    frame_delay = max(1 / fps - elapsed_time, 0)
 
 
     source = str(source)
@@ -158,7 +198,13 @@ def run(
         # Define the path for the CSV file
         csv_path = save_dir / "predictions.csv"
 
-        # Create or append to the CSV file
+        # Create or append to the CSV fil
+
+        im0s = np.ascontiguousarray(im0s)
+
+        annotator = Annotator(im0s.copy(), line_width=line_thickness, example=str(names))
+        im0 = annotator.result()  # Assuming annotator.result() is the frame to be streamed
+        process.stdin.write(im0.tobytes())
 
 
         def calculate_camera_angles(center_x, center_y, img_width, img_height):
@@ -179,19 +225,7 @@ def run(
                     writer.writeheader()
                 writer.writerow(data)
 
-        #---------------------------------------------2-PX4------------------------------------------------------------------------
-        def main():
-                connection_string = '127.0.0.1:14550'
-                pixhawk_connection = connect.connect_to_px4(connection_string)
-                if pixhawk_connection:
-                    while True:
-                        latitude, longitude = connect.get_gps_data(pixhawk_connection)
-                        if latitude is not None and longitude is not None:
-                            print(f"Current GPS Coordinates: Latitude = {latitude}, Longitude = {longitude}")
-                        else:
-                            print("Unable to retrieve GPS coordinates.")
-        #---------------------------------------------2-pixhawk------------------------------------------------------------------------
-
+        
             
         # Process predictions
         for i, det in enumerate(pred):  # per image
@@ -218,33 +252,33 @@ def run(
                 # Print results
                 for c in det[:, 5].unique():
                     n = (det[:, 5] == c).sum()  # detections per class
-                    s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
-
-                 #----------------------------------------------------------------3- PX4----------------------------------------------------------------------   
-                for *xyxy, conf, cls in reversed(det):
-                    if names[int(cls)] == 'person':
-                        lat, lon =get_gps_data(connection_gps)
-                        label = f"{names[int(cls)]} {conf:.2f} Lat:{lat} Lon:{lon}"
-                        annotator.box_label(xyxy, label, color=colors(cls))
-                        print(f"Person detected at ({lat}, {lon}) with confidence {conf:.2f}")      
-                  #----------------------------------------------------------------3----------------------------------------------------------------------   
+                    s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string  
 
                 for *xyxy, conf, cls in reversed(det):
                     if names[int(cls)] == 'person':
                         x1, y1, x2, y2 = map(int, xyxy)
                         center_x = (x1 + x2) // 2
-                        center_y = (x1 + x2) // 2
+                        center_y = (y1 + y2) // 2
                         width = x2 - x1
                         height = y2 - y1
                         area  = width * height
                         distance = math.sqrt((center_x - frame_center_x)**2 + (center_y - frame_center_y)**2)
                         if distance < min_distance:
                             min_distance = distance
-                            closest_person = (*xyxy, conf, cls)
-                            print(f"Person detected with bounding box: {x1, y1, x2, y2}")
-                            print(f"Width: {width}, Height: {height}, Area: {area} pixels²")
+                           #closest_person = (*xyxy, conf, cls)
+                    cv2.rectangle(im0, (x1, y1), (x2, y2), (255, 0, 0), 2)
+                    label = f"Pixel: ({center_x}, {center_y})"
+                    pixel_value = im0[center_y, center_x].tolist() if 0 <= center_x < im0.shape[1] and 0 <= center_y < im0.shape[0] else None
+                    #print(("pixel: hhhhhhhhhhhhhhhh" , pixel_value ))
+                    label = f"{model.names[int(cls)]} {conf:.2f} | Pixel: {pixel_value}"
+                    cv2.putText(im0, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+                    #print(f'Pixel Value at Center: {pixel_value}')
+                    print(f"Width: {width}, Height: {height}, Area: {area}, Distance: {distance:.2f}")
+                    print(f"BBox: ({x1}, {y1}), ({x2}, {y2}) | Center: ({center_x}, {center_y})")
 
-                    
+                    if not terminal_opened:
+                        thread = threading.Thread(target=run_program_after_delay, args=(center_x, center_y))
+                        thread.start()
                 # Write results
                 for *xyxy, conf, cls in det:
                     x1, y1, x2, y2 = map(int, xyxy)
@@ -292,14 +326,10 @@ def run(
                         annotator.box_label(xyxy, label, color=colors(c, True))
                     if save_crop:
                         save_one_box(xyxy, imc, file=save_dir / "crops" / names[c] / f"{p.stem}.jpg", BGR=True)
+                    #detect_pixel_value(im0, x1, y1, x2, y2, model)
 
-                    if closest_person:
-                        x1, y1, x2, y2, conf, cls = closest_person
-                        lat, lon = get_gps_data(connection_gps)
-                        label = f"{names[int(cls)]} {conf:.2f} Lat:{lat} Lon:{lon}"
-                        print(f"Closest person detected at ({lat}, {lon}) with confidence {conf:.2f}.")
-                        annotator.box_label((x1, y1, x2, y2), label, color=colors(cls))
-                        break
+        
+
 
 
             # Stream results
