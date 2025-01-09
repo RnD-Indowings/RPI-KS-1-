@@ -104,7 +104,7 @@ def run(
     locked_target = None,
 ):
     
-    rtsp_url = "rtsp://127.0.0.1:8554/live"
+    rtsp_url = "rtsp://127.0.2.1:8554/live"
     fps = 60
     print("Frame rate of input video: ", fps)
     ffmpeg_command = [
@@ -121,14 +121,15 @@ def run(
         '-preset', 'ultrafast',  # Adjust preset if needed
         '-tune', 'zerolatency',  # Minimize latency
         '-f', 'rtsp',  # RTSP format
+        '-rtsp_transport', 'tcp',
         rtsp_url  # Output RTSP stream URL
     ]
-    
+    #ffmpeg -y -f rawvideo -vcodec rawvideo -pix_fmt yuv420p -s 640x480 -r 30 -i - -an -vcodec libx264 -preset ultrafast -tune zerolatency -f rtsp -rtsp_transport tcp rtsp://127.0.2.1:8554/live
+
     min_distance = float('inf')  # Initialize to a very large value
     process = subprocess.Popen(ffmpeg_command, stdin=subprocess.PIPE)
-    prev_time = time.time()
-    elapsed_time = time.time() - prev_time
-    frame_delay = max(1 / fps - elapsed_time, 0)
+    #prev_time = time.time()
+    #elapsed_time = time.time() - prev_time
 
 
     source = str(source)
@@ -200,11 +201,10 @@ def run(
 
         # Create or append to the CSV fil
 
-        im0s = np.ascontiguousarray(im0s)
-
-        annotator = Annotator(im0s.copy(), line_width=line_thickness, example=str(names))
-        im0 = annotator.result()  # Assuming annotator.result() is the frame to be streamed
-        process.stdin.write(im0.tobytes())
+        #im0s = np.ascontiguousarray(im0s)
+        #annotator = Annotator(im0s.copy(), line_width=line_thickness, example=str(names))
+        #im0 = annotator.result()  # Assuming annotator.result() is the frame to be streamed
+        #process.stdin.write(im0.tobytes())
 
 
         def calculate_camera_angles(center_x, center_y, img_width, img_height):
@@ -275,10 +275,12 @@ def run(
                     #print(f'Pixel Value at Center: {pixel_value}')
                     print(f"Width: {width}, Height: {height}, Area: {area}, Distance: {distance:.2f}")
                     print(f"BBox: ({x1}, {y1}), ({x2}, {y2}) | Center: ({center_x}, {center_y})")
+                    
 
                     if not terminal_opened:
                         thread = threading.Thread(target=run_program_after_delay, args=(center_x, center_y))
                         thread.start()
+
                 # Write results
                 for *xyxy, conf, cls in det:
                     x1, y1, x2, y2 = map(int, xyxy)
@@ -307,6 +309,7 @@ def run(
                     confidence_str = f"{confidence:.2f}"
 
                     if save_csv:
+                        
                         write_to_csv(p.name, label, confidence_str)
 
                     if save_txt:  # Write to file
@@ -341,6 +344,10 @@ def run(
                     cv2.resizeWindow(str(p), im0.shape[1], im0.shape[0])
                 cv2.imshow(str(p), im0)
                 cv2.waitKey(1)  # 1 millisecond
+                im0s = np.ascontiguousarray(im0s)
+                annotator = Annotator(im0s.copy(), line_width=line_thickness, example=str(names))
+                im0 = annotator.result()  # Assuming annotator.result() is the frame to be streamed
+                process.stdin.write(im0.tobytes())
 
             # Save results (image with detections)
             if save_img:
@@ -401,7 +408,7 @@ print(f"Camera FOV: Horizontal = {fov_x:.2f}°, Vertical = {fov_y:.2f}°")
 def parse_opt():
     parser = argparse.ArgumentParser()
     parser.add_argument("--weights", nargs="+", type=str, default=ROOT / "yolov5x.pt", help="model path or triton URL")
-    parser.add_argument("--source", type=str, default=ROOT / "data/images", help="file/dir/URL/glob/screen/0(webcam)")
+    parser.add_argument("--source", type=str, default = "0", help="file/dir/URL/glob/screen/0(webcam)")
     parser.add_argument("--data", type=str, default=ROOT / "data/coco128.yaml", help="(optional) dataset.yaml path")
     parser.add_argument("--imgsz", "--img", "--img-size", nargs="+", type=int, default=[640], help="inference size h,w")
     parser.add_argument("--conf-thres", type=float, default=0.25, help="confidence threshold")
