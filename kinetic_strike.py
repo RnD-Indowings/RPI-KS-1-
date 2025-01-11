@@ -6,8 +6,8 @@ import threading
 from localization import pixel_to_latlon 
 import os
 import sys
-#from connect import connect_to_px4 , get_gps_data
-#connection_gps = connect_to_px4('127.0.0.1:14550')
+from connect import connect_to_px4 
+connection_gps = connect_to_px4('127.0.0.1:14550')
 
 
 # Global variables for midpoints
@@ -88,7 +88,7 @@ async def run():
 
     
     drone = System()
-    await drone.connect(system_address="127.0.0.1:14550")
+    await drone.connect(system_address="serial:///dev/ttyACM0:1152000")
     speed_task = asyncio.ensure_future(print_current_speed(drone))
 
     print("Waiting for drone to connect...")
@@ -119,9 +119,12 @@ async def run():
 
 
     # Target locations
-    lat = True
-    lon = True
-    target_altitude = -10  # in meters
+   # Access the command-line arguments
+    lat = float(sys.argv[1])  # Argument 1
+    lon = float(sys.argv[2])  # Argument 2  
+    print(f"Received Coordinates: ({lat} {lon})")
+
+    target_altitude = -20  # in meters
 
     # Get current position
     current_lat = position.latitude_deg
