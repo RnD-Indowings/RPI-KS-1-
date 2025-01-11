@@ -2,8 +2,28 @@ import sys
 import numpy as np
 from pymavlink import mavutil
 import time
+import threading
+import os
 from connect import connect_to_px4 , get_gps_data
 connection_gps = connect_to_px4('127.0.0.1:14550') 
+
+terminal_opened = False
+lock = threading.Lock()
+def run_program_after_delays(lat , lon):
+    global terminal_opened
+    with lock:
+        if terminal_opened:
+            return
+        terminal_opened = True
+        time.sleep(15)
+    
+    # Run the program using os.system with arguments
+    command = f'gnome-terminal -- bash -c "python3 kinetic_strike.py  {lat} {lon}; exec bash"'
+    
+    # Execute the command to open the terminal and run the script
+    os.system(command)
+    run_program_after_delays(lat, lon)
+    return
 
 # Function to get GPS data from PX4
 def get_gps_data(connection):
@@ -57,6 +77,10 @@ def main():
             
             # Add a small delay to avoid flooding the output
             time.sleep(1)
+            if not terminal_opened:
+                thread = threading.Thread(target=run_program_after_delays, args=(lat, lon))
+                thread.start()
 
 if __name__ == '__main__':
+    
     main()
