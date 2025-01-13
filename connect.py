@@ -2,7 +2,7 @@
 from pymavlink import mavutil
 
 # Connect to Pixhawk
-def connect_to_px4(connection_string='serial:///dev/ttyACM0:921600'):
+def connect_to_px4(connection_string='udp:127.0.0.1:14550'):
     """
     Establishes a connection to the Pixhawk autopilot using MAVLink.
 
@@ -53,7 +53,7 @@ def get_gps_data(connection_gps):
 # Main function to demonstrate connection and GPS data retrieval
 if __name__ == "__main__":
     # Replace with your connection string
-    connection_string = '127.0.0.1:14550'
+    connection_string = 'udp:127.0.0.1:14550'
 
     # Connect to Pixhawk
     pixhawk_connection = connect_to_px4(connection_string)
