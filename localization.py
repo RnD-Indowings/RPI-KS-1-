@@ -5,7 +5,7 @@ import time
 import threading
 import os
 from connect import connect_to_px4 , get_gps_data
-connection_gps = connect_to_px4('127.0.0.1:14550') 
+connection_gps = connect_to_px4('udp:127.0.0.1:14550') 
 
 terminal_opened = False
 lock = threading.Lock()
@@ -60,7 +60,7 @@ def main():
     print(f"Received Pixel: ({center_x}, {center_y})")
 
     # Connect to PX4
-    connection_string = '127.0.0.1:14550'
+    connection_string = 'udp:127.0.0.1:14550'
     pixhawk_connection = connect_to_px4(connection_string)
     if pixhawk_connection:
         while True:
