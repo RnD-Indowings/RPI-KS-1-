@@ -1,6 +1,6 @@
 import os
 from pymavlink import mavutil
-connection = mavutil.mavlink_connection('127.0.0.1:14550')
+connection = mavutil.mavlink_connection('udp:127.0.0.1:14550')
 
 
 def execute_script():
